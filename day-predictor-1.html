@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
+<title>NASA Day Predictor</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --black:#020408;
+    --cyan:#00f5ff;
+    --orange:#ff6b00;
+    --white:#e8f4ff;
+    --dim:#4a6080;
+    --green:#00ff88;
+  }
+  html,body{height:100%;background:var(--black);color:var(--white);font-family:'Rajdhani',sans-serif;overflow:hidden}
+
+  #starfield{position:fixed;inset:0;pointer-events:none;z-index:0}
+  .star{position:absolute;background:#fff;border-radius:50%;animation:twinkle var(--d) ease-in-out infinite}
+  @keyframes twinkle{0%,100%{opacity:.15;transform:scale(1)}50%{opacity:1;transform:scale(1.4)}}
+
+  .nebula{
+    position:fixed;inset:0;pointer-events:none;z-index:0;
+    background:
+      radial-gradient(ellipse at 15% 55%,rgba(0,80,255,.09) 0%,transparent 55%),
+      radial-gradient(ellipse at 85% 20%,rgba(255,50,0,.07) 0%,transparent 50%),
+      radial-gradient(ellipse at 55% 85%,rgba(80,0,255,.06) 0%,transparent 50%);
+  }
+
+  /* ── SCREENS ── */
+  .screen{
+    display:none;position:fixed;inset:0;z-index:1;
+    align-items:center;justify-content:center;
+    flex-direction:column;padding:20px;
+    text-align:center;overflow-y:auto;
+  }
+  .screen.active{display:flex;animation:fadeIn .7s ease}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+
+  /* ── CREATOR TAG — absolute inside each screen so it never moves ── */
+  #ctag{
+    position:fixed;bottom:14px;right:16px;
+    font-family:'Orbitron',sans-serif;font-size:9px;
+    letter-spacing:1.5px;color:rgba(0,245,255,.38);
+    text-shadow:0 0 8px rgba(0,245,255,.22);
+    pointer-events:none;line-height:1.8;text-align:right;z-index:9999;
+  }
+  #ctag span{display:block;font-size:7.5px;color:rgba(0,245,255,.18);letter-spacing:2px}
+
+  /* ══════════════════════════════════════
+       SCREEN 1 — WELCOME (full redesign)
+     ══════════════════════════════════════ */
+  .welcome-wrap{display:flex;flex-direction:column;align-items:center;width:100%;max-width:460px}
+
+  .top-label{
+    display:flex;align-items:center;gap:10px;
+    font-family:'Orbitron',sans-serif;font-size:8.5px;
+    letter-spacing:4px;color:rgba(0,245,255,.45);margin-bottom:22px;width:100%;
+  }
+  .top-label::before,.top-label::after{content:'';flex:1;height:1px}
+  .top-label::before{background:linear-gradient(90deg,transparent,rgba(0,245,255,.3))}
+  .top-label::after{background:linear-gradient(90deg,rgba(0,245,255,.3),transparent)}
+
+  /* Scene */
+  .scene{position:relative;width:240px;height:250px;margin-bottom:20px;flex-shrink:0}
+
+  /* Planet */
+  .planet{
+    position:absolute;bottom:0;left:50%;transform:translateX(-50%);
+    width:120px;height:120px;border-radius:50%;
+    background:radial-gradient(circle at 32% 28%,#1a3a6a,#050d1a 70%);
+    box-shadow:0 0 0 1px rgba(0,245,255,.14),0 0 36px rgba(0,100,255,.18),inset -18px -10px 36px rgba(0,0,0,.8);
+    overflow:hidden;
+  }
+  .planet::after{
+    content:'';position:absolute;inset:0;border-radius:50%;
+    background:
+      repeating-linear-gradient(0deg,transparent,transparent 16px,rgba(0,245,255,.05) 16px,rgba(0,245,255,.05) 17px),
+      repeating-linear-gradient(90deg,transparent,transparent 16px,rgba(0,245,255,.05) 16px,rgba(0,245,255,.05) 17px);
+  }
+  .planet-ring{
+    position:absolute;width:180px;height:38px;
+    border:1.5px solid rgba(0,245,255,.16);border-radius:50%;
+    bottom:42px;left:50%;transform:translateX(-50%) rotateX(68deg);
+    pointer-events:none;
+  }
+  .planet-ring::before{
+    content:'';position:absolute;inset:4px;
+    border:1px solid rgba(255,107,0,.1);border-radius:50%;
+  }
+  .p-glow{
+    position:absolute;bottom:-4px;left:50%;transform:translateX(-50%);
+    width:120px;height:28px;
+    background:radial-gradient(ellipse,rgba(0,100,255,.28) 0%,transparent 70%);
+  }
+
+  /* Rocket */
+  .rocket-wrap{
+    position:absolute;top:4px;left:50%;
+    transform:translateX(-50%);
+    width:72px;
+    filter:drop-shadow(0 0 16px rgba(0,245,255,.55));
+    animation:rhover 3.5s ease-in-out infinite;
+  }
+  @keyframes rhover{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-13px)}}
+
+  .exhaust{
+    position:absolute;bottom:-30px;left:50%;transform:translateX(-50%);
+    width:28px;display:flex;flex-direction:column;align-items:center;
+    animation:epulse .18s ease-in-out infinite alternate;
+    pointer-events:none;
+  }
+  @keyframes epulse{from{transform:translateX(-50%) scaleY(.82);opacity:.8}to{transform:translateX(-50%) scaleY(1.18);opacity:1}}
+  .f1{width:20px;height:24px;background:linear-gradient(180deg,#ff9900,#ff3300,transparent);border-radius:50% 50% 50% 50%/40% 40% 60% 60%}
+  .f2{width:11px;height:14px;background:linear-gradient(180deg,#fff,#ffcc00,transparent);border-radius:50% 50% 50% 50%/40% 40% 60% 60%;margin-top:-16px}
+
+  /* Title */
+  .eyebrow{font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:5px;color:var(--orange);opacity:.75;margin-bottom:7px}
+  .big-title{
+    font-family:'Orbitron',sans-serif;font-weight:900;line-height:.95;
+    font-size:clamp(36px,9vw,58px);letter-spacing:-1px;
+    background:linear-gradient(155deg,#fff 0%,var(--cyan) 55%,#0077ff 100%);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+    margin-bottom:4px;
+  }
+  .ghost-title{
+    font-family:'Orbitron',sans-serif;font-size:clamp(18px,5vw,32px);
+    font-weight:400;color:rgba(255,255,255,.1);letter-spacing:9px;margin-bottom:18px;
+  }
+  .w-desc{font-size:12.5px;color:var(--dim);letter-spacing:1.5px;margin-bottom:24px;line-height:1.65}
+
+  /* Stats row */
+  .stats-row{display:flex;gap:10px;width:100%;margin-bottom:26px}
+  .sbox{flex:1;border:1px solid rgba(0,245,255,.12);border-radius:4px;padding:8px 4px;background:rgba(0,245,255,.03)}
+  .sbox-v{font-family:'Orbitron',sans-serif;font-size:12px;color:var(--cyan);font-weight:700}
+  .sbox-l{font-size:7.5px;color:var(--dim);letter-spacing:1.5px;font-family:'Orbitron',sans-serif;margin-top:2px}
+
+  /* Launch btn */
+  .launch-btn{
+    position:relative;display:flex;align-items:center;gap:11px;
+    padding:15px 44px;font-family:'Orbitron',sans-serif;font-size:14px;
+    font-weight:700;letter-spacing:2.5px;color:#000;
+    background:linear-gradient(135deg,var(--cyan) 0%,#0099ff 100%);
+    border:none;border-radius:4px;cursor:pointer;overflow:hidden;
+    box-shadow:0 0 34px rgba(0,245,255,.44),0 0 70px rgba(0,245,255,.14);
+    transition:transform .2s,box-shadow .2s;
+  }
+  .launch-btn::after{
+    content:'';position:absolute;top:-50%;left:-60%;
+    width:35%;height:200%;background:rgba(255,255,255,.34);
+    transform:skewX(-20deg);animation:shine 2.5s ease-in-out infinite;
+  }
+  @keyframes shine{0%{left:-60%}100%{left:130%}}
+  .launch-btn:hover{transform:scale(1.04);box-shadow:0 0 55px rgba(0,245,255,.65),0 0 120px rgba(0,245,255,.2)}
+  .launch-btn:active{transform:scale(.97)}
+
+  .scan-bar{
+    width:100%;height:1px;margin-top:26px;
+    background:linear-gradient(90deg,transparent,rgba(0,245,255,.35),transparent);
+    position:relative;overflow:hidden;
+  }
+  .scan-bar::after{
+    content:'';position:absolute;left:-30%;width:30%;height:100%;
+    background:linear-gradient(90deg,transparent,rgba(0,245,255,.9),transparent);
+    animation:srun 2s linear infinite;
+  }
+  @keyframes srun{from{left:-30%}to{left:130%}}
+
+  /* ══════════════════════
+       SCREENS 2–5 shared
+     ══════════════════════ */
+  .hud-frame{
+    border:1px solid rgba(0,245,255,.18);
+    padding:40px 32px;border-radius:6px;
+    max-width:540px;width:100%;position:relative;
+    background:rgba(5,13,26,.87);backdrop-filter:blur(12px);
+  }
+  .hc{position:absolute;width:18px;height:18px;border-color:var(--cyan);border-style:solid}
+  .hc.tl{top:-1px;left:-1px;border-width:2px 0 0 2px}
+  .hc.tr{top:-1px;right:-1px;border-width:2px 2px 0 0}
+  .hc.bl{bottom:-1px;left:-1px;border-width:0 0 2px 2px}
+  .hc.br{bottom:-1px;right:-1px;border-width:0 2px 2px 0}
+
+  .hud-tag{font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:2px;color:rgba(0,245,255,.38);margin-bottom:16px}
+  .intro-main{font-family:'Orbitron',sans-serif;font-size:clamp(18px,5vw,30px);font-weight:900;color:var(--white);line-height:1.2;margin-bottom:11px}
+  .intro-main span{color:var(--cyan)}
+  .intro-sub{font-size:12.5px;color:var(--dim);letter-spacing:1px;line-height:1.7;margin-bottom:32px}
+  .einput{
+    width:100%;padding:13px 16px;
+    background:rgba(0,245,255,.04);border:1px solid rgba(0,245,255,.26);
+    border-radius:4px;color:var(--cyan);font-family:'Orbitron',sans-serif;
+    font-size:12px;letter-spacing:2px;text-align:center;outline:none;
+    transition:border-color .3s,box-shadow .3s;
+  }
+  .einput:focus{border-color:var(--cyan);box-shadow:0 0 16px rgba(0,245,255,.18)}
+  .einput::placeholder{color:rgba(0,245,255,.22);font-size:10px}
+  .ehint{margin-top:10px;font-size:11px;color:var(--dim);letter-spacing:1px}
+
+  /* Day select */
+  .dq{font-family:'Orbitron',sans-serif;font-size:clamp(14px,4vw,20px);font-weight:700;color:var(--white);margin-bottom:5px;letter-spacing:2px}
+  .ds{font-size:12px;color:var(--dim);margin-bottom:24px;letter-spacing:1px}
+  .days-grid{display:flex;flex-direction:column;gap:8px;width:100%}
+  .dbtn{
+    padding:11px 18px;background:rgba(0,245,255,.03);
+    border:1px solid rgba(0,245,255,.11);border-radius:4px;
+    color:var(--white);font-family:'Rajdhani',sans-serif;font-size:14px;
+    font-weight:600;letter-spacing:3px;cursor:pointer;
+    transition:all .2s;display:flex;align-items:center;justify-content:space-between;
+    position:relative;overflow:hidden;
+  }
+  .dbtn::before{content:'';position:absolute;left:0;top:0;height:100%;width:3px;background:var(--cyan);transform:scaleY(0);transition:transform .2s}
+  .dbtn:hover{border-color:var(--cyan);background:rgba(0,245,255,.07);color:var(--cyan);transform:translateX(4px);box-shadow:0 0 16px rgba(0,245,255,.1)}
+  .dbtn:hover::before{transform:scaleY(1)}
+  .dnum{font-size:9px;color:var(--dim);font-family:'Orbitron',sans-serif}
+
+  /* Loading */
+  .ltitle{font-family:'Orbitron',sans-serif;font-size:clamp(11px,3vw,16px);color:var(--cyan);letter-spacing:3px;margin-bottom:26px}
+  .prog-wrap{width:100%;max-width:480px;margin-bottom:22px}
+  .prog-labels{display:flex;justify-content:space-between;margin-bottom:6px}
+  .plabel{font-family:'Orbitron',sans-serif;font-size:9px;color:var(--dim);letter-spacing:2px}
+  .ppct{font-family:'Orbitron',sans-serif;font-size:11px;color:var(--cyan)}
+  .pbar-out{width:100%;height:7px;background:rgba(0,245,255,.08);border-radius:4px;border:1px solid rgba(0,245,255,.13);overflow:hidden;position:relative}
+  .pbar-in{height:100%;width:0%;background:linear-gradient(90deg,#0040ff,var(--cyan));border-radius:4px;transition:width .1s linear;box-shadow:0 0 10px var(--cyan);position:relative}
+  .pbar-in::after{content:'';position:absolute;right:0;top:-2px;width:3px;height:calc(100% + 4px);background:#fff;border-radius:2px;box-shadow:0 0 5px #fff}
+  .nbox{
+    width:100%;max-width:480px;height:195px;overflow:hidden;
+    border:1px solid rgba(0,245,255,.1);border-radius:5px;
+    background:rgba(0,0,0,.5);padding:10px;
+    font-family:'Rajdhani',sans-serif;font-size:12px;
+    display:flex;flex-direction:column;gap:5px;position:relative;
+  }
+  .notif{display:flex;align-items:flex-start;gap:7px;opacity:0;animation:nin .4s ease forwards}
+  @keyframes nin{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+  .ni{font-size:12px;flex-shrink:0;margin-top:1px}
+  .nt{color:#7a9ab8;line-height:1.4}
+  .nt .hi{color:var(--cyan)}.nt .wa{color:var(--orange)}.nt .ok{color:var(--green)}
+  .scanv{position:absolute;top:0;left:0;width:100%;height:2px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);animation:scv 2s linear infinite;opacity:.32;pointer-events:none}
+  @keyframes scv{from{top:0}to{top:100%}}
+
+  /* Result */
+  .rframe{
+    border:1px solid rgba(0,255,136,.22);padding:40px 32px;border-radius:6px;
+    max-width:540px;width:100%;position:relative;
+    background:rgba(0,18,10,.87);backdrop-filter:blur(12px);
+    box-shadow:0 0 46px rgba(0,255,136,.08);
+  }
+  .rframe .hc{border-color:var(--green)}
+  .sbadge{display:inline-block;padding:5px 16px;background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.22);border-radius:20px;font-family:'Orbitron',sans-serif;font-size:8.5px;letter-spacing:3px;color:var(--green);margin-bottom:20px}
+  .ctxt{font-family:'Orbitron',sans-serif;font-size:clamp(17px,5vw,26px);font-weight:900;color:var(--white);margin-bottom:8px}
+  .plabel2{font-size:11px;color:var(--dim);letter-spacing:2px;margin-bottom:20px}
+  .pday{
+    font-family:'Orbitron',sans-serif;font-size:clamp(30px,10vw,62px);font-weight:900;
+    background:linear-gradient(135deg,var(--green),var(--cyan));
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+    margin-bottom:20px;animation:pd 2s ease-in-out infinite;
+  }
+  @keyframes pd{0%,100%{filter:brightness(1)}50%{filter:brightness(1.3)}}
+  .rstats{display:flex;gap:12px;justify-content:center;margin-bottom:26px;flex-wrap:wrap}
+  .rbox{padding:8px 14px;border:1px solid rgba(0,245,255,.12);border-radius:4px;background:rgba(0,245,255,.03)}
+  .rl{font-size:7.5px;color:var(--dim);letter-spacing:2px;font-family:'Orbitron',sans-serif;margin-bottom:3px}
+  .rv{font-size:12px;color:var(--cyan);font-family:'Orbitron',sans-serif;font-weight:700}
+  .rbtn{padding:12px 36px;font-family:'Orbitron',sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--green);background:transparent;border:1px solid rgba(0,255,136,.3);border-radius:4px;cursor:pointer;transition:all .2s}
+  .rbtn:hover{background:rgba(0,255,136,.08);box-shadow:0 0 16px rgba(0,255,136,.16)}
+
+  .cdot{position:fixed;width:5px;height:5px;border-radius:50%;pointer-events:none;animation:cf var(--fd) ease-in forwards;z-index:100}
+  @keyframes cf{0%{transform:translateY(-10px) rotate(0);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0}}
+
+  @media(max-width:400px){
+    .hud-frame,.rframe{padding:24px 14px}
+    .launch-btn{padding:13px 28px}
+    .scene{width:200px;height:210px}
+  }
+</style>
+</head>
+<body>
+<div class="nebula"></div>
+<div id="starfield"></div>
+
+<!-- ══════ SCREEN 1 — WELCOME ══════ -->
+<div class="screen active" id="screen-welcome">
+  <div class="welcome-wrap">
+
+    <div class="top-label">⬡ NASA TEMPORAL DIVISION ⬡</div>
+
+    <div class="scene">
+      <!-- Planet -->
+      <div class="planet"></div>
+      <div class="planet-ring"></div>
+      <div class="p-glow"></div>
+
+      <!-- Rocket -->
+      <div class="rocket-wrap">
+        <svg viewBox="0 0 60 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Body -->
+          <path d="M30 3C30 3 13 28 11 62L49 62C47 28 30 3 30 3Z" fill="url(#bg)"/>
+          <!-- Nose highlight -->
+          <path d="M30 3C26 16 21 34 19 52L41 52C39 34 34 16 30 3Z" fill="url(#ng)"/>
+          <!-- Window -->
+          <ellipse cx="30" cy="40" rx="9" ry="11" fill="url(#wg)" stroke="#00f5ff" stroke-width="1"/>
+          <ellipse cx="27" cy="36" rx="3.5" ry="4.5" fill="rgba(255,255,255,.22)"/>
+          <ellipse cx="32" cy="42" rx="1.5" ry="2" fill="rgba(255,255,255,.1)"/>
+          <!-- Stripe -->
+          <rect x="11" y="54" width="38" height="2.5" fill="rgba(0,245,255,.28)" rx="1"/>
+          <rect x="11" y="58" width="38" height="2" fill="rgba(255,107,0,.38)" rx="1"/>
+          <!-- Center body -->
+          <rect x="13" y="62" width="34" height="26" fill="url(#mg)" rx="2"/>
+          <!-- Panel windows -->
+          <rect x="16" y="66" width="11" height="8" fill="rgba(0,245,255,.12)" rx="1" stroke="rgba(0,245,255,.28)" stroke-width=".6"/>
+          <rect x="33" y="66" width="11" height="8" fill="rgba(0,245,255,.12)" rx="1" stroke="rgba(0,245,255,.28)" stroke-width=".6"/>
+          <circle cx="30" cy="80" r="4.5" fill="rgba(255,107,0,.22)" stroke="rgba(255,107,0,.55)" stroke-width=".8"/>
+          <circle cx="30" cy="80" r="2" fill="rgba(255,107,0,.5)"/>
+          <!-- Fins -->
+          <path d="M13 70L2 96L13 88Z" fill="url(#fg)"/>
+          <path d="M47 70L58 96L47 88Z" fill="url(#fg)"/>
+          <!-- Mini fins -->
+          <path d="M13 60L7 74L13 70Z" fill="rgba(100,180,220,.45)"/>
+          <path d="M47 60L53 74L47 70Z" fill="rgba(100,180,220,.45)"/>
+          <!-- Nozzle -->
+          <path d="M13 88L9 102L51 102L47 88Z" fill="url(#nzg)"/>
+          <!-- Engines -->
+          <ellipse cx="21" cy="102" rx="5.5" ry="3" fill="#000" stroke="rgba(0,245,255,.4)" stroke-width=".8"/>
+          <ellipse cx="39" cy="102" rx="5.5" ry="3" fill="#000" stroke="rgba(0,245,255,.4)" stroke-width=".8"/>
+          <ellipse cx="21" cy="102" rx="3.2" ry="1.8" fill="rgba(255,140,0,.7)"/>
+          <ellipse cx="39" cy="102" rx="3.2" ry="1.8" fill="rgba(255,140,0,.7)"/>
+          <!-- Solar panels -->
+          <rect x="-10" y="64" width="18" height="9" fill="url(#sg)" rx="1" stroke="rgba(0,245,255,.28)" stroke-width=".5"/>
+          <rect x="52" y="64" width="18" height="9" fill="url(#sg)" rx="1" stroke="rgba(0,245,255,.28)" stroke-width=".5"/>
+          <line x1="4" y1="64" x2="4" y2="73" stroke="rgba(0,245,255,.35)" stroke-width=".5"/>
+          <line x1="8" y1="64" x2="8" y2="73" stroke="rgba(0,245,255,.35)" stroke-width=".5"/>
+          <line x1="56" y1="64" x2="56" y2="73" stroke="rgba(0,245,255,.35)" stroke-width=".5"/>
+          <line x1="60" y1="64" x2="60" y2="73" stroke="rgba(0,245,255,.35)" stroke-width=".5"/>
+          <!-- Antenna -->
+          <line x1="30" y1="3" x2="30" y2="-6" stroke="rgba(0,245,255,.6)" stroke-width="1"/>
+          <circle cx="30" cy="-7" r="2" fill="var(--cyan)" opacity=".7"/>
+          <defs>
+            <linearGradient id="bg" x1="14" y1="0" x2="46" y2="0" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#8ab8d8"/><stop offset="50%" stop-color="#ddeeff"/><stop offset="100%" stop-color="#5888a8"/>
+            </linearGradient>
+            <linearGradient id="ng" x1="19" y1="3" x2="41" y2="52" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#fff"/><stop offset="100%" stop-color="#a0c8e8"/>
+            </linearGradient>
+            <radialGradient id="wg" cx="38%" cy="32%" r="55%">
+              <stop offset="0%" stop-color="#00f5ff" stop-opacity=".9"/>
+              <stop offset="55%" stop-color="#004488"/><stop offset="100%" stop-color="#000820"/>
+            </radialGradient>
+            <linearGradient id="mg" x1="13" y1="62" x2="47" y2="88" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#2a4a6a"/><stop offset="100%" stop-color="#0a1e30"/>
+            </linearGradient>
+            <linearGradient id="fg" x1="0" y1="70" x2="14" y2="96" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#7ab0d0"/><stop offset="100%" stop-color="#2a5070"/>
+            </linearGradient>
+            <linearGradient id="nzg" x1="9" y1="88" x2="51" y2="102" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#3a6080"/><stop offset="100%" stop-color="#1a3040"/>
+            </linearGradient>
+            <linearGradient id="sg" x1="0" y1="0" x2="1" y2="0" gradientUnits="objectBoundingBox">
+              <stop offset="0%" stop-color="#0a2a4a"/><stop offset="50%" stop-color="#1a4a7a"/><stop offset="100%" stop-color="#0a2a4a"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <div class="exhaust"><div class="f1"></div><div class="f2"></div></div>
+      </div>
+    </div>
+
+    <div class="eyebrow">QUANTUM CHRONOLOGY ENGINE v9.4.2</div>
+    <div class="big-title">DAY<br>PREDICTOR</div>
+    <div class="ghost-title">SYSTEM</div>
+    <p class="w-desc">Powered by 47 NASA satellites &amp; deep-space quantum data</p>
+
+    <div class="stats-row">
+      <div class="sbox"><div class="sbox-v">99.97%</div><div class="sbox-l">ACCURACY</div></div>
+      <div class="sbox"><div class="sbox-v">47</div><div class="sbox-l">SATELLITES</div></div>
+      <div class="sbox"><div class="sbox-v" style="color:var(--green)">ONLINE</div><div class="sbox-l">STATUS</div></div>
+    </div>
+
+    <button class="launch-btn" onclick="goTo('screen-intro')">🚀 LAUNCH MISSION</button>
+    <div class="scan-bar"></div>
+  </div>
+
+</div>
+
+<!-- ══════ SCREEN 2 — INTRO ══════ -->
+<div class="screen" id="screen-intro">
+  <div class="hud-frame">
+    <div class="hc tl"></div><div class="hc tr"></div><div class="hc bl"></div><div class="hc br"></div>
+    <div class="hud-tag">// SYSTEM INITIALIZED — AWAITING INPUT</div>
+    <h2 class="intro-main">LET'S PREDICT<br>YOUR <span>NEXT DAY</span> 🚀</h2>
+    <p class="intro-sub">Quantum satellite array locked onto your timeline.<br>Enter your name to begin chronological analysis.</p>
+    <input class="einput" type="text" id="name-input" placeholder="ENTER YOUR NAME..." maxlength="30" onkeydown="handleEnter(event)"/>
+    <p class="ehint">Press ENTER to initialize prediction sequence</p>
+  </div>
+
+</div>
+
+<!-- ══════ SCREEN 3 — DAY SELECT ══════ -->
+<div class="screen" id="screen-dayselect">
+  <div class="hud-frame">
+    <div class="hc tl"></div><div class="hc tr"></div><div class="hc bl"></div><div class="hc br"></div>
+    <div class="hud-tag">// TEMPORAL COORDINATES REQUIRED</div>
+    <h2 class="dq">WHAT DAY IS TODAY?</h2>
+    <p class="ds">Select your position in Earth's rotation cycle</p>
+    <div class="days-grid" id="days-grid"></div>
+  </div>
+
+</div>
+
+<!-- ══════ SCREEN 4 — LOADING ══════ -->
+<div class="screen" id="screen-loading">
+  <div class="ltitle">⚡ QUANTUM ANALYSIS IN PROGRESS...</div>
+  <div class="prog-wrap">
+    <div class="prog-labels">
+      <span class="plabel">CHRONON PROCESSING</span>
+      <span class="ppct" id="pct">0%</span>
+    </div>
+    <div class="pbar-out"><div class="pbar-in" id="pbar"></div></div>
+  </div>
+  <div class="nbox" id="nbox"><div class="scanv"></div></div>
+
+</div>
+
+<!-- ══════ SCREEN 5 — RESULT ══════ -->
+<div class="screen" id="screen-result">
+  <div class="rframe">
+    <div class="hc tl"></div><div class="hc tr"></div><div class="hc bl"></div><div class="hc br"></div>
+    <div class="sbadge">✓ PREDICTION SUCCESSFUL</div>
+    <h2 class="ctxt">🎉 CONGRATULATIONS!</h2>
+    <p class="plabel2">QUANTUM RESULT FOR <span id="rname" style="color:var(--cyan)"></span></p>
+    <p style="font-size:12px;color:var(--dim);margin-bottom:8px">YOUR NEXT DAY IS</p>
+    <div class="pday" id="rday"></div>
+    <div class="rstats">
+      <div class="rbox"><div class="rl">ACCURACY</div><div class="rv">99.97%</div></div>
+      <div class="rbox"><div class="rl">SATELLITES</div><div class="rv">47</div></div>
+      <div class="rbox"><div class="rl">TIMELINE</div><div class="rv" style="color:var(--green)">STABLE</div></div>
+    </div>
+    <button class="rbtn" onclick="restart()">↺ NEW PREDICTION</button>
+  </div>
+
+</div>
+
+<script>
+const DAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+const DNUMS=["01","02","03","04","05","06","07"];
+const NOTIFS=[
+  {i:"🛰️",t:'Connecting to <span class="hi">NASA Deep Space Network</span>... LINK ESTABLISHED ✓'},
+  {i:"⚡",t:'Downloading <span class="hi">47 satellite feeds</span>... bandwidth: 8.4 TB/s'},
+  {i:"🌍",t:'Scanning <span class="hi">Earth rotation axis</span>... tilt: 23.5°... NORMAL'},
+  {i:"🔭",t:'Consulting <span class="hi">Hubble Telescope</span> archives... 1990–2025 loaded'},
+  {i:"⚠️",t:'<span class="wa">WARNING:</span> Temporal anomaly near Jupiter... compensating...'},
+  {i:"🧠",t:'Running <span class="hi">Quantum Chronology v9.4</span>... 1.2 billion data points'},
+  {i:"📡",t:'Signal from <span class="hi">ISS Mission Control</span>... Houston, we have data ✓'},
+  {i:"🌙",t:'Cross-referencing <span class="hi">lunar phase</span>... doesn\'t matter but looks cool'},
+  {i:"🤖",t:'AI model "CHRONOS-7" activated... <span class="hi">predicting timelines...</span>'},
+  {i:"🛸",t:'<span class="wa">ALERT:</span> Unidentified object at 3:47 AM... probably just a bird lol'},
+  {i:"⏱️",t:'Measuring <span class="hi">spacetime curvature</span>... curvature: very curvy'},
+  {i:"🔬",t:'Analyzing <span class="hi">quantum entanglement</span> in DNA... interesting results'},
+  {i:"📊",t:'Calculating <span class="hi">probability matrices</span>... 8,742 futures eliminated'},
+  {i:"🌠",t:'Checking <span class="hi">cosmic microwave background</span>... no effect but sounds epic'},
+  {i:"💫",t:'<span class="ok">SUCCESS:</span> Temporal coordinates LOCKED. Uploading...'},
+  {i:"🚀",t:'<span class="ok">FINAL COMPUTATION COMPLETE.</span> Decrypting your prediction...'},
+];
+
+let selDay='',uName='';
+
+// Stars
+const sf=document.getElementById('starfield');
+for(let i=0;i<200;i++){
+  const s=document.createElement('div');s.className='star';
+  const sz=Math.random()*2.5+0.5;
+  s.style.cssText=`width:${sz}px;height:${sz}px;top:${Math.random()*100}%;left:${Math.random()*100}%;--d:${Math.random()*4+2}s;animation-delay:${Math.random()*5}s`;
+  sf.appendChild(s);
+}
+
+// Day buttons
+const grid=document.getElementById('days-grid');
+DAYS.forEach((d,i)=>{
+  const b=document.createElement('button');b.className='dbtn';
+  b.innerHTML=`<span>${d.toUpperCase()}</span><span class="dnum">DAY-${DNUMS[i]}</span>`;
+  b.onclick=()=>startLoad(d);grid.appendChild(b);
+});
+
+function goTo(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function handleEnter(e){
+  if(e.key==='Enter'){
+    const v=document.getElementById('name-input').value.trim();
+    if(v){uName=v.toUpperCase();goTo('screen-dayselect');}
+  }
+}
+function nextDay(d){return DAYS[(DAYS.indexOf(d)+1)%7];}
+
+function startLoad(day){
+  selDay=day;goTo('screen-loading');
+  const bar=document.getElementById('pbar'),pct=document.getElementById('pct'),box=document.getElementById('nbox');
+  bar.style.width='0%';pct.textContent='0%';
+  box.innerHTML='<div class="scanv"></div>';
+  let p=0;const total=30000,step=50;
+  const inc=(step/total)*100,ni=total/NOTIFS.length;
+  const t=setInterval(()=>{p=Math.min(p+inc,100);bar.style.width=p+'%';pct.textContent=Math.floor(p)+'%';if(p>=100)clearInterval(t);},step);
+  NOTIFS.forEach((n,i)=>setTimeout(()=>{
+    const d=document.createElement('div');d.className='notif';
+    d.innerHTML=`<span class="ni">${n.i}</span><span class="nt">${n.t}</span>`;
+    box.appendChild(d);box.scrollTop=box.scrollHeight;
+  },i*ni+200));
+  setTimeout(showResult,total+500);
+}
+function showResult(){
+  document.getElementById('rday').textContent=nextDay(selDay).toUpperCase();
+  document.getElementById('rname').textContent=uName||'COMMANDER';
+  goTo('screen-result');confetti();
+}
+function confetti(){
+  const cols=['#00f5ff','#ff6b00','#00ff88','#fff','#ffdd00'];
+  for(let i=0;i<65;i++)setTimeout(()=>{
+    const d=document.createElement('div');d.className='cdot';
+    d.style.cssText=`left:${Math.random()*100}%;background:${cols[~~(Math.random()*cols.length)]};--fd:${Math.random()*2+1.4}s;animation-delay:${Math.random()*0.4}s`;
+    document.body.appendChild(d);setTimeout(()=>d.remove(),4000);
+  },i*40);
+}
+function restart(){
+  document.getElementById('name-input').value='';uName='';selDay='';goTo('screen-welcome');
+}
+</script>
+
+<div id="ctag"><span>CREATOR</span>@r4jput_5hiv4</div>
+
+</body>
+</html>
